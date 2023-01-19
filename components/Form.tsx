@@ -2,12 +2,16 @@ import { FC } from 'react'
 import { StudentIntro } from '../models/StudentIntro'
 import { useState } from 'react'
 import { Box, Button, FormControl, FormLabel, Input, Textarea } from '@chakra-ui/react'
+import { useWallet, useConnection } from '@solana/wallet-adapter-react'
+import * as web3 from "@solana/web3.js"
 
 const STUDENT_INTRO_PROGRAM_ID = 'HdE95RSVsdb315jfJtaykXhXY478h53X6okDupVfY9yf'
 
 export const Form: FC = () => {
     const [name, setName] = useState('')
     const [message, setMessage] = useState('')
+    const {publicKey, sendTransaction} = useWallet()
+    const {connection } = useConnection()
 
     const handleSubmit = (event: any) => {
         event.preventDefault()
@@ -16,7 +20,49 @@ export const Form: FC = () => {
     }
 
     const handleTransactionSubmit = async (studentIntro: StudentIntro) => {
-        console.log(JSON.stringify(studentIntro))
+
+        const transaction = new web3.Transaction()
+
+        if(!publicKey) {
+            alert("Connect your wallet")
+            return
+        }
+
+        const buffer = studentIntro.serialize()
+
+        const [pda] = await web3.PublicKey.findProgramAddress(
+            [publicKey.toBuffer()], 
+            new web3.PublicKey(STUDENT_INTRO_PROGRAM_ID))
+
+        const instruction = new web3.TransactionInstruction({
+            keys: [
+            {
+                pubkey: publicKey,
+                isSigner: true,
+                isWritable: false
+            }, 
+            {
+                pubkey: pda,
+                isSigner: false,
+                isWritable: true
+            },
+            {
+                pubkey: web3.SystemProgram.programId,
+                isSigner: false,
+                isWritable: false
+            }
+        ],
+        data: buffer,
+        programId: new web3.PublicKey(STUDENT_INTRO_PROGRAM_ID)
+        })
+
+        transaction.add(instruction)
+        try {
+            let txid = await sendTransaction(transaction,connection)
+            console.log(`Transaction submitted: https://explorer.solana.com/tx/${txid}?cluster=devnet`)
+        } catch(e) {
+            alert(JSON.stringify(e))
+        }
     }
 
     return (
